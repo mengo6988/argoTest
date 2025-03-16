@@ -1,0 +1,77 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app
+  namespace: demo-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      containers:
+      - name: demo-app
+        image: mengo6988/k8s-argo-demo:latest
+        ports:
+        - containerPort: 3000
+        resources:
+          limits:
+            cpu: "0.5"
+            memory: "256Mi"
+          requests:
+            cpu: "0.2"
+            memory: "128Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app-service
+  namespace: demo-app
+spec:
+  selector:
+    app: demo-app
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: demo-app-ingress
+  namespace: demo-app
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: demo-app-service
+            port:
+              number: 80

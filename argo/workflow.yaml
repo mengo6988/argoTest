@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: demo-app-ci-cd-
+  namespace: argo
+spec:
+  entrypoint: build-and-deploy
+  # Volume claim for Docker socket to build images
+  volumes:
+  - name: docker-socket
+    hostPath:
+      path: /var/run/docker.sock
+      type: Socket
+
+  templates:
+  - name: build-and-deploy
+    dag:
+      tasks:
+      - name: build-image
+        template: build-docker-image
+      - name: deploy-to-k8s
+        template: deploy-to-kubernetes
+        dependencies: [build-image]
+
+  - name: build-docker-image
+    container:
+      image: docker:19.03.13-dind
+      command: [sh, -c]
+      args:
+      - |
+        cd /workspace &&
+        docker build -t mengo6988/k8s-argo-demo:latest . &&
+        docker push mengo6988/k8s-argo-demo:latest
+      volumeMounts:
+      - name: docker-socket
+        mountPath: /var/run/docker.sock
+      workingDir: /workspace
+    inputs:
+      artifacts:
+      - name: source-code
+        path: /workspace
+        git:
+          repo: ${YOUR_GIT_REPO}
+          revision: main
+
+  - name: deploy-to-kubernetes
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+      - |
+        kubectl apply -f /workspace/kubernetes/
+      volumeMounts:
+      - name: kubeconfig
+        mountPath: /root/.kube/config
+      workingDir: /workspace
+    inputs:
+      artifacts:
+      - name: source-code
+        path: /workspace
+        git:
+          repo: ${YOUR_GIT_REPO}
+          revision: main
